@@ -1,0 +1,33 @@
+# docker-compose.yml
+# Local, single-command Postgres for the RLS isolation lab.
+#
+# The credentials below are DEV-ONLY throwaway values for running this demo on
+# localhost. They are intentionally trivial and must NEVER be used anywhere real
+# -- a production deployment injects secrets from the environment / a vault.
+services:
+  db:
+    image: postgres:16
+    container_name: rls_lab_db
+    environment:
+      # DEV-ONLY local credentials -- do not reuse.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rls_lab
+    ports:
+      - "5432:5432"
+    volumes:
+      # Files in this directory run once, in filename order, on a FRESH volume.
+      # 001_schema.sql then 002_rls.sql bootstrap the schema + RLS + roles.
+      # They run as the superuser `postgres`, so 001 first creates the tables
+      # owned by postgres; 002 then reassigns them to the dedicated NON-superuser
+      # `app_owner` role (so FORCE ROW LEVEL SECURITY genuinely binds the owner)
+      # and the app connects as the non-owner `app_user`.
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rls_lab"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+# No named volume on purpose: `docker compose down -v` (see `make down`) wipes
+# the database so the init migrations re-run cleanly on the next `up`.

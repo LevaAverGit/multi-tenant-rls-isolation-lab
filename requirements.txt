@@ -1,0 +1,9 @@
+# Runtime + test dependencies for the RLS isolation lab.
+# Lower bounds pin a known-good baseline so a fresh checkout reproduces the
+# tested environment; upper bounds keep a future major release from silently
+# breaking the "runs with one command" claim.
+psycopg[binary]>=3.1,<4     # PostgreSQL driver (v3); raw SQL, no ORM hiding the RLS
+fastapi>=0.110,<1.0         # minimal read API that sets the per-request tenant GUC
+uvicorn>=0.29,<1.0          # ASGI server to run the FastAPI app
+pytest>=8.0,<9.0            # the isolation / break-isolation tests are the artifact
+httpx>=0.27,<1.0            # HTTP client for exercising the FastAPI endpoints by hand
