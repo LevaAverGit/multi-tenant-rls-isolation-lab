@@ -73,7 +73,7 @@ def list_items(
     with tenant_connection(tenant_id) as conn:
         rows = conn.execute(
             f"SELECT {_ITEM_COLUMNS} FROM items "
-            "WHERE tenant_id = %s ORDER BY created_at",
+            "WHERE tenant_id = %s ORDER BY created_at LIMIT 1000",
             (tenant_id,),
         ).fetchall()
     return {"tenant_id": tenant_id, "count": len(rows), "items": rows}
@@ -94,7 +94,8 @@ def list_items_unscoped(
     tenant_id = _require_tenant(x_tenant_id)
     with tenant_connection(tenant_id) as conn:
         # No WHERE clause, on purpose -- see the docstring. RLS still isolates.
+        # LIMIT is only a resource guard; it is not what scopes the rows.
         rows = conn.execute(
-            f"SELECT {_ITEM_COLUMNS} FROM items ORDER BY created_at"
+            f"SELECT {_ITEM_COLUMNS} FROM items ORDER BY created_at LIMIT 1000"
         ).fetchall()
     return {"tenant_id": tenant_id, "count": len(rows), "items": rows}

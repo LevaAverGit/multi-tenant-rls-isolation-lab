@@ -16,15 +16,21 @@ Two design points are what make the isolation real:
     ``SET LOCAL``) with the tenant id passed as a *bound parameter*. The RLS
     policies read that GUC (see ``migrations/002_rls.sql``).
 
-    Transaction scope is what makes this pattern safe on a POOLED connection --
-    the real reason it is used here. A transaction-local setting is discarded
-    automatically at ``COMMIT``/``ROLLBACK``, so a connection handed back to the
-    pool can never carry a stale tenant into the next request. Session scope
-    (``set_config(..., false)``) does NOT reset on its own: on a pooled
-    connection a request that forgot to re-establish its context would silently
-    inherit the previous tenant's rows -- a cross-tenant leak with no ``WHERE``
-    and no error. Because the value is transaction-local, autocommit must be OFF
-    (a real transaction is required for ``SET LOCAL`` to have any effect).
+    Transaction scope is what makes this pattern safe to run behind a connection
+    pool. A transaction-local setting is discarded automatically at
+    ``COMMIT``/``ROLLBACK``, so a connection handed back to a pool can never carry
+    a stale tenant into the next request. Session scope (``set_config(..., false)``)
+    does NOT reset on its own: on a pooled connection a request that forgot to
+    re-establish its context would silently inherit the previous tenant's rows --
+    a cross-tenant leak with no ``WHERE`` and no error. Because the value is
+    transaction-local, autocommit must be OFF (a real transaction is required for
+    ``SET LOCAL`` to have any effect).
+
+    Scope note: to stay minimal, this module opens one connection per call and
+    closes it -- it does NOT ship a pool. The transaction-local design above is
+    exactly what lets a real deployment drop in a bounded pool
+    (e.g. ``psycopg_pool.ConnectionPool``) without risking tenant bleed; that is
+    the property being demonstrated, not a claim that the lab itself pools.
 """
 
 import os
@@ -59,13 +65,15 @@ def tenant_connection(tenant_id: str) -> Iterator[psycopg.Connection]:
     never be used for SQL injection; callers are still expected to pass a
     validated UUID string (the API layer validates the request header).
     """
-    conn = psycopg.connect(APP_DSN, row_factory=dict_row)  # autocommit off
+    conn = psycopg.connect(APP_DSN, row_factory=dict_row, connect_timeout=5)  # autocommit off
     try:
         # A real transaction is required for a transaction-local setting to take
         # effect. is_local = true -> the value auto-resets at COMMIT/ROLLBACK, so
         # a pooled connection never leaks a stale tenant into the next request.
         with conn.transaction():
             conn.execute("SELECT set_config('app.tenant_id', %s, true)", (tenant_id,))
+            # Bound query time so a stalled or lock-blocked backend can't hang a worker.
+            conn.execute("SET LOCAL statement_timeout = '5s'")
             yield conn
     finally:
         conn.close()

@@ -14,7 +14,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rls_lab
     ports:
-      - "5432:5432"
+      # Bind to loopback only: a dev-password superuser must not be reachable
+      # from other hosts on a shared/non-firewalled network.
+      - "127.0.0.1:5432:5432"
     volumes:
       # Files in this directory run once, in filename order, on a FRESH volume.
       # 001_schema.sql then 002_rls.sql bootstrap the schema + RLS + roles.
