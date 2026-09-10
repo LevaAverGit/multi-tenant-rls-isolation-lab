@@ -11,6 +11,8 @@ deliberately omits the `WHERE tenant_id` filter and shows the data does not leak
 
 No business logic, no clients, no real credentials — just the pattern.
 
+*Why it matters: a forgotten tenant filter is one of the most common — and most expensive — SaaS data-leak and audit findings; enforcing isolation in the database means an app-layer bug can't become a cross-tenant breach.*
+
 ---
 
 ## The break test (the point of the repo)
