@@ -28,8 +28,8 @@ migrations applied:
 
 ```
 $ make test          # APP_DSN=... pytest -q  (against the running Postgres)
-............                                                             [100%]
-12 passed in 0.35s
+.............                                                            [100%]
+13 passed in 0.35s
 
 ====================================================================
 break-isolation transcript

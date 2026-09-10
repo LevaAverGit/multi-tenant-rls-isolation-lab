@@ -126,7 +126,7 @@ def _emit_transcript() -> Iterator[None]:
     yield
     banner = "=" * 68
     print("\n" + banner)
-    print("break-isolation transcript (paste into README)")
+    print("break-isolation transcript")
     print(banner)
     for line in TRANSCRIPT:
         print(line)
@@ -270,6 +270,24 @@ def test_missing_tenant_context_fails_closed(seed: dict) -> None:
     )
 
 
+def test_blank_tenant_context_fails_closed_not_error(seed: dict) -> None:
+    """A GUC set to '' returns ZERO rows -- it must not raise a cast error.
+
+    Guards the `NULLIF(current_setting(...), '')` in the policies. `missing_ok`
+    alone only covers the never-set case; a blank GUC (a realistic pooled
+    leftover after RESET) would reach `''::uuid` and raise `invalid input syntax
+    for type uuid`. Because that fires inside the policy it aborts the statement
+    instead of failing closed. The NULLIF turns '' back into NULL, so a blank
+    context is contained exactly like an unset one. Drop the NULLIF from
+    002_rls.sql and this test goes red where the unset-context test stays green.
+    """
+    with _app_connection(tenant_id=None) as conn:
+        conn.execute("SELECT set_config('app.tenant_id', %s, true)", ("",))
+        rows = conn.execute(FORGOTTEN_WHERE_SQL).fetchall()
+
+    assert rows == [], "a blank tenant context must return no rows, not error"
+
+
 # --------------------------------------------------------------------------- #
 # Half 2 -- THE COUNTER-EXAMPLE: the same query leaks where RLS does not bind.
 # --------------------------------------------------------------------------- #
@@ -278,9 +296,9 @@ def test_same_query_leaks_across_tenants_for_superuser(seed: dict) -> None:
 
     The `postgres` superuser connection bypasses Row-Level Security (a superuser
     is exempt even under FORCE, regardless of who owns the table). Running the
-    *exact same* statement there returns rows from BOTH tenants. This is the proof that the query
-    itself is unsafe -- half 1 was made safe purely by the app_user + FORCE RLS
-    setup, not by anything in the SQL.
+    *exact same* statement there returns rows from BOTH tenants. This is the
+    proof that the query itself is unsafe -- half 1 was made safe purely by the
+    app_user + FORCE RLS setup, not by anything in the SQL.
     """
     with psycopg.connect(SUPERUSER_DSN, autocommit=True, row_factory=dict_row) as su:
         rows = su.execute(FORGOTTEN_WHERE_SQL).fetchall()
