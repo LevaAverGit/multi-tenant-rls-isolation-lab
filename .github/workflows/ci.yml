@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rls_lab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ADMIN_DSN: postgresql://postgres:postgres@localhost:5432/rls_lab
+      SUPERUSER_DSN: postgresql://postgres:postgres@localhost:5432/rls_lab
+      APP_DSN: postgresql://app_user:app_user@localhost:5432/rls_lab
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Apply migrations (schema, then RLS + roles)
+        run: |
+          psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -f migrations/001_schema.sql
+          psql "$ADMIN_DSN" -v ON_ERROR_STOP=1 -f migrations/002_rls.sql
+      - name: Run the isolation suite
+        run: python -m pytest -q
+      - name: Lint (non-blocking)
+        run: |
+          pip install ruff
+          ruff check . || true
+
+  security:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install security tools
+        run: pip install "bandit[sarif]" pip-audit
+      - name: Bandit SAST (SARIF)
+        run: bandit -r . -x ./tests -f sarif -o bandit.sarif || true
+      - name: Upload Bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+        continue-on-error: true
+      - name: Dependency audit (non-blocking)
+        run: pip-audit -r requirements.txt || true
