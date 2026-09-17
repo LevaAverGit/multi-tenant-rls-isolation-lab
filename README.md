@@ -1,5 +1,10 @@
 # multi-tenant-rls-isolation-lab
 
+[![CI](https://github.com/LevaAverGit/multi-tenant-rls-isolation-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/LevaAverGit/multi-tenant-rls-isolation-lab/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-RLS-4169E1?logo=postgresql&logoColor=white)
+
 **The app forgot `WHERE tenant_id = ...`. What does the database return?**
 
 - **Without RLS** — other tenants' rows. A single missing clause leaks every customer's data.
